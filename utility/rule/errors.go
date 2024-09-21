@@ -1,4 +1,4 @@
-package controller
+package rule
 
 import "github.com/xmplusdev/xmcore/common/errors"
 

@@ -1,7 +1,8 @@
 package controller
 
 import (
-	"github.com/xcode75/XMPlus/common/mylego"
+	"github.com/XMPlusDev/XMPlusv1/utility/mylego"
+	"github.com/XMPlusDev/XMPlusv1/utility/limiter"
 )
 
 type Config struct {
@@ -10,8 +11,7 @@ type Config struct {
 	FallBackConfigs         []*FallBackConfig                `mapstructure:"FallBackConfigs"`
 	EnableDNS               bool                             `mapstructure:"EnableDNS"`
 	DNSStrategy             string                           `mapstructure:"DNSStrategy"`
-	EnableFragment          bool                             `mapstructure:"EnableFragment"`
-	FragmentConfigs         *FragmentConfig                  `mapstructure:"FragmentConfigs"`
+	IPLimit                 *limiter.IPLimit                 `mapstructure:"IPLimit"`
 }
 
 type FallBackConfig struct {
@@ -20,10 +20,4 @@ type FallBackConfig struct {
 	Path             string `mapstructure:"Path"`
 	Dest             string `mapstructure:"Dest"`
 	ProxyProtocolVer uint64 `mapstructure:"ProxyProtocolVer"`
-}
-
-type FragmentConfig struct {
-	Packets  string `mapstructure:"Packets"`
-	Length   string `mapstructure:"Length"`
-	Interval string `mapstructure:"Interval"`
 }

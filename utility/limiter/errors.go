@@ -1,4 +1,4 @@
-package controller
+package limiter
 
 import "github.com/xmplusdev/xmcore/common/errors"
 

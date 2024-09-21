@@ -7,14 +7,14 @@ import (
 
 	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
 	C "github.com/sagernet/sing/common"
-	"github.com/xcode75/xcore/common/protocol"
-	"github.com/xcode75/xcore/common/serial"
-	"github.com/xcode75/xcore/infra/conf"
-	"github.com/xcode75/xcore/proxy/shadowsocks"
-	"github.com/xcode75/xcore/proxy/shadowsocks_2022"
-	"github.com/xcode75/xcore/proxy/trojan"
-	"github.com/xcode75/xcore/proxy/vless"
-	"github.com/xcode75/XMPlus/api"
+	"github.com/xmplusdev/xmcore/common/protocol"
+	"github.com/xmplusdev/xmcore/common/serial"
+	"github.com/xmplusdev/xmcore/infra/conf"
+	"github.com/xmplusdev/xmcore/proxy/shadowsocks"
+	"github.com/xmplusdev/xmcore/proxy/shadowsocks_2022"
+	"github.com/xmplusdev/xmcore/proxy/trojan"
+	"github.com/xmplusdev/xmcore/proxy/vless"
+	"github.com/XMPlusDev/XMPlusv1/api"
 )
 
 var AEADMethod = map[shadowsocks.CipherType]uint8{
@@ -78,7 +78,7 @@ func (c *Controller) buildSSUser(userInfo *[]api.UserInfo, method string) (users
 			e := c.buildUserTag(&user)
 			userKey, err := c.checkShadowsocksPassword(user.Passwd, method)
 			if err != nil {
-				newError(fmt.Errorf("[UID: %d] %s", user.UID, err)).AtError().WriteToLog()
+				newError(fmt.Errorf("[UID: %d] %s", user.UID, err)).AtError()
 				continue
 			}
 			users[i] = &protocol.User{
@@ -111,7 +111,7 @@ func (c *Controller) buildSSPluginUser(userInfo *[]api.UserInfo, method string) 
 			e := c.buildUserTag(&user)
 			userKey, err := c.checkShadowsocksPassword(user.Passwd, method)
 			if err != nil {
-				newError(fmt.Errorf("[UID: %d] %s", user.UID, err)).AtError().WriteToLog()
+				newError(fmt.Errorf("[UID: %d] %s", user.UID, err)).AtError()
 				continue
 			}
 			users[i] = &protocol.User{
@@ -159,4 +159,21 @@ func (c *Controller) checkShadowsocksPassword(password string, method string) (s
 		userKey = password[:32]
 	}
 	return base64.StdEncoding.EncodeToString([]byte(userKey)), nil
+}
+
+
+
+func cipherFromString(c string) shadowsocks.CipherType {
+	switch strings.ToLower(c) {
+	case "aes-128-gcm", "aead_aes_128_gcm":
+		return shadowsocks.CipherType_AES_128_GCM
+	case "aes-256-gcm", "aead_aes_256_gcm":
+		return shadowsocks.CipherType_AES_256_GCM
+	case "chacha20-poly1305", "aead_chacha20_poly1305", "chacha20-ietf-poly1305":
+		return shadowsocks.CipherType_CHACHA20_POLY1305
+	case "none", "plain":
+		return shadowsocks.CipherType_NONE
+	default:
+		return shadowsocks.CipherType_UNKNOWN
+	}
 }

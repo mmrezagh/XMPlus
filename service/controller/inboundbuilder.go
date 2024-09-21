@@ -11,11 +11,11 @@ import (
 
 	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
 	C "github.com/sagernet/sing/common"
-	"github.com/xcode75/xcore/common/net"
-	"github.com/xcode75/xcore/core"
-	"github.com/xcode75/xcore/infra/conf"
-	"github.com/xcode75/XMPlus/api"
-	"github.com/xcode75/XMPlus/common/mylego"
+	"github.com/xmplusdev/xmcore/common/net"
+	"github.com/xmplusdev/xmcore/core"
+	"github.com/xmplusdev/xmcore/infra/conf"
+	"github.com/XMPlusDev/XMPlusv1/api"
+	"github.com/XMPlusDev/XMPlusv1/utility/mylego"
 )
 
 // InboundBuilder build Inbound config for different protocol
@@ -38,7 +38,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 	sniffingConfig := &conf.SniffingConfig{
 		Enabled:      nodeInfo.Sniffing,
-		DestOverride: &conf.StringList{"http", "tls"},
+		DestOverride: &conf.StringList{"http", "tls", "quic", "fakedns"},
 	}
 	
 	inboundDetourConfig.SniffingConfig = sniffingConfig
@@ -126,7 +126,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			NetworkList: []string{"tcp", "udp"},
 		}
 	default:
-		return nil, fmt.Errorf("Unsupported Node Type: %s", nodeInfo.NodeType)
+		return nil, fmt.Errorf("Unsupported Node Type: %v", nodeInfo)
 	}
 
 	setting, err := json.Marshal(proxySetting)
@@ -138,7 +138,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 	// Build streamSettings
 	streamSetting = new(conf.StreamConfig)
-	transportProtocol := conf.TransportProtocol(nodeInfo.TransportProtocol)
+	transportProtocol := conf.TransportProtocol(nodeInfo.Transport)
 	networkType, err := transportProtocol.Build()
 	if err != nil {
 		return nil, fmt.Errorf("convert TransportProtocol failed: %s", err)
@@ -148,51 +148,71 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	case "tcp":
 		tcpSetting := &conf.TCPConfig{
 			AcceptProxyProtocol: nodeInfo.ProxyProtocol,
+			HeaderConfig:  nodeInfo.Header,
 		}
-		tcpSetting.HeaderConfig = nodeInfo.Header
-		
 		streamSetting.TCPSettings = tcpSetting
 	case "websocket":
-		headers := make(map[string]string)
-		headers["Host"] = nodeInfo.Host
 		wsSettings := &conf.WebSocketConfig{
 			AcceptProxyProtocol: nodeInfo.ProxyProtocol,
-			Path:                nodeInfo.Path,
-			Headers:             headers,
+			Path: nodeInfo.Path,
+			Host: nodeInfo.Host,
 		}
 		streamSetting.WSSettings = wsSettings
 	case "http":
 		hosts := conf.StringList{nodeInfo.Host}
 		httpSettings := &conf.HTTPConfig{
-			Host: &hosts,
-			Path: nodeInfo.Path,
+			Host:    &hosts,
+			Path:    nodeInfo.Path,
 		}
 		streamSetting.HTTPSettings = httpSettings
+	case "httpupgrade":
+		httpupgradeSettings := &conf.HttpUpgradeConfig{
+		    AcceptProxyProtocol: nodeInfo.ProxyProtocol,
+			Host: nodeInfo.Host,
+			Path: nodeInfo.Path,
+		}
+		streamSetting.HTTPUPGRADESettings = httpupgradeSettings	
+	case "splithttp":
+		scMaxEachPostBytes := conf.Int32Range{
+			From: nodeInfo.ScMaxEachPostBytes, 
+			To: nodeInfo.ScMaxEachPostBytes,
+		}
+		scMaxConcurrentPosts := conf.Int32Range{
+			From: nodeInfo.ScMaxConcurrentPosts, 
+			To: nodeInfo.ScMaxConcurrentPosts,
+		}
+		scMinPostsIntervalMs := conf.Int32Range{
+			From: nodeInfo.ScMinPostsIntervalMs, 
+			To: nodeInfo.ScMinPostsIntervalMs,
+		}
+		splithttpSettings := &conf.SplitHTTPConfig{
+			Host: nodeInfo.Host,
+			Path: nodeInfo.Path,
+			ScMaxEachPostBytes: scMaxEachPostBytes,
+			ScMaxConcurrentPosts: scMaxConcurrentPosts,
+			ScMinPostsIntervalMs: scMinPostsIntervalMs,
+			NoSSEHeader: nodeInfo.NoSSEHeader,
+		}
+		streamSetting.SplitHTTPSettings = splithttpSettings		
 	case "grpc":
 		grpcSettings := &conf.GRPCConfig{
 			ServiceName: nodeInfo.ServiceName,
+			Authority: nodeInfo.Authority,
+			UserAgent:   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/123.0.6312.52 Mobile/15E148 Safari/604.1",
 		}
 		streamSetting.GRPCConfig = grpcSettings
 	case "quic":
-		if nodeInfo.Quic_key != "" {
-			quicSettings := &conf.QUICConfig{
-				Security:  nodeInfo.Quic_security,
-				Header:    nodeInfo.Header,
-				Key:       nodeInfo.Quic_key,
-			}
-			streamSetting.QUICSettings = quicSettings
-		}else{
-			quicSettings := &conf.QUICConfig{
-				Security:  nodeInfo.Quic_security,
-				Header:    nodeInfo.Header,
-			}
-			streamSetting.QUICSettings = quicSettings
+		quicSettings := &conf.QUICConfig{
+			Security:  nodeInfo.Quic_security,
+			Key:       nodeInfo.Quic_key,
+			Header:    nodeInfo.Header,
 		}
+		streamSetting.QUICSettings = quicSettings
 	case "mkcp":
 		kcpSettings := &conf.KCPConfig{
-			HeaderConfig:    nodeInfo.Header,
+			HeaderConfig:   nodeInfo.Header,
 			Congestion:      &nodeInfo.Congestion,
-			Seed:            &nodeInfo.Seed,
+			Seed:  &nodeInfo.Seed,
 		}
 		streamSetting.KCPSettings = kcpSettings	
 	}
@@ -210,12 +230,6 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			tlsSettings := &conf.TLSConfig{
 				RejectUnknownSNI: nodeInfo.RejectUnknownSNI,
 			}
-			tlsSettings.Insecure = nodeInfo.AllowInsecure
-			tlsSettings.ServerName = nodeInfo.CertDomain
-			if nodeInfo.Alpn != "" {
-				alpn := conf.StringList{nodeInfo.Alpn}
-				tlsSettings.ALPN = &alpn
-			}
 			tlsSettings.Fingerprint = nodeInfo.Fingerprint
 			tlsSettings.Certs = append(tlsSettings.Certs, &conf.TLSCertConfig{CertFile: certFile, KeyFile: keyFile, OcspStapling: 3600})
 
@@ -226,7 +240,6 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	// Build REALITY settings
 	if nodeInfo.TLSType == "reality" {
 		streamSetting.Security = "reality"
-
 		dest, err := json.Marshal(nodeInfo.Dest)
 		if err != nil {
 			return nil, fmt.Errorf("marshal dest %s config fialed: %s", dest, err)
@@ -240,19 +253,15 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		realitySettings.ServerNames = nodeInfo.ServerNames
 		realitySettings.PrivateKey = nodeInfo.PrivateKey
 		realitySettings.ShortIds = nodeInfo.ShortIds
-		
 		if nodeInfo.MinClientVer != "" {
 			realitySettings.MinClientVer = nodeInfo.MinClientVer
 		}
-		
 		if nodeInfo.MaxClientVer != "" {
 			realitySettings.MaxClientVer = nodeInfo.MaxClientVer
 		}	
-		
 		if nodeInfo.MaxTimeDiff > 0 {
 			realitySettings.MaxTimeDiff = nodeInfo.MaxTimeDiff
 		}
-		
 		streamSetting.REALITYSettings = realitySettings
 	}
 

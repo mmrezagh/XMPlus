@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xcode75/xcore/common/protocol"
-	"github.com/xcode75/xcore/core"
-	"github.com/xcode75/xcore/features/inbound"
-	"github.com/xcode75/xcore/features/outbound"
-	"github.com/xcode75/xcore/features/stats"
-	"github.com/xcode75/xcore/proxy"
-	"github.com/xcode75/XMPlus/api"
+	"github.com/xmplusdev/xmcore/common/protocol"
+	"github.com/xmplusdev/xmcore/core"
+	"github.com/xmplusdev/xmcore/features/inbound"
+	"github.com/xmplusdev/xmcore/features/outbound"
+	"github.com/xmplusdev/xmcore/features/stats"
+	"github.com/xmplusdev/xmcore/proxy"
+	"github.com/XMPlusDev/XMPlusv1/api"
+	"github.com/XMPlusDev/XMPlusv1/utility/limiter"
 )
 
 func (c *Controller) removeInbound(tag string) error {
@@ -130,8 +131,8 @@ func (c *Controller) resetTraffic(upCounterList *[]stats.Counter, downCounterLis
 	}
 }
 
-func (c *Controller) AddInboundLimiter(tag string, nodeSpeedLimit uint64, userList *[]api.UserInfo) error {
-	err := c.dispatcher.Limiter.AddInboundLimiter(tag, nodeSpeedLimit, userList)
+func (c *Controller) AddInboundLimiter(tag string, nodeSpeedLimit uint64, userList *[]api.UserInfo, globalIPLimit *limiter.IPLimit) error {
+	err := c.dispatcher.Limiter.AddInboundLimiter(tag, nodeSpeedLimit, userList, globalIPLimit )
 	return err
 }
 
@@ -145,7 +146,7 @@ func (c *Controller) DeleteInboundLimiter(tag string) error {
 	return err
 }
 
-func (c *Controller) GetOnlineDevice(tag string) (*[]api.OnlineUser, error) {
+func (c *Controller) GetOnlineDevice(tag string) (*[]api.OnlineIP, error) {
 	return c.dispatcher.Limiter.GetOnlineDevice(tag)
 }
 
@@ -158,11 +159,11 @@ func (c *Controller) GetDetectResult(tag string) (*[]api.DetectResult, error) {
 	return c.dispatcher.RuleManager.GetDetectResult(tag)
 }
 
-func (c *Controller) AddUsersRule(tag string, email []string) {
-	c.rdispatcher.AddUsers(tag, email)
+func (c *Controller) AddUserRule(tag string, email []string) {
+	c.rdispatcher.AddUserRule(tag, email)
 }
 
-func (c *Controller) RemoveUsersRule(email []string)  {
-	c.rdispatcher.RemoveUsers(email)
+func (c *Controller) RemoveUserRule(email []string)  {
+	c.rdispatcher.RemoveUserRule(email)
 	return
 }

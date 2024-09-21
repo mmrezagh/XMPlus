@@ -6,21 +6,21 @@ import (
 	"reflect"
 	"time"
 	"strings"
-	"math/rand"
 	
-	"github.com/xcode75/xcore/common/protocol"
-	"github.com/xcode75/xcore/common/task"
-	"github.com/xcode75/xcore/core"
-	"github.com/xcode75/xcore/features/inbound"
-	"github.com/xcode75/xcore/features/outbound"
-	"github.com/xcode75/xcore/features/routing"
-	"github.com/xcode75/xcore/features/stats"
-	"github.com/xcode75/xcore/app/router"
+	"github.com/xmplusdev/xmcore/common/protocol"
+	"github.com/xmplusdev/xmcore/common/task"
+	"github.com/xmplusdev/xmcore/core"
+	"github.com/xmplusdev/xmcore/features/inbound"
+	"github.com/xmplusdev/xmcore/features/outbound"
+	"github.com/xmplusdev/xmcore/features/routing"
+	"github.com/xmplusdev/xmcore/features/stats"
+	"github.com/xmplusdev/xmcore/app/router"
+	"github.com/XMPlusDev/XMPlusv1/api"
+	"github.com/XMPlusDev/XMPlusv1/app/xdispatcher"
+	"github.com/XMPlusDev/XMPlusv1/utility/mylego"
 	C "github.com/sagernet/sing/common"
 	"github.com/sagernet/sing-shadowsocks/shadowaead_2022"
-	"github.com/xcode75/XMPlus/api"
-	"github.com/xcode75/XMPlus/app/mydispatcher"
-	"github.com/xcode75/XMPlus/common/mylego"
+	"github.com/xmplusdev/xmcore/infra/conf"
 )
 
 type Controller struct {
@@ -29,20 +29,18 @@ type Controller struct {
 	clientInfo   api.ClientInfo
 	apiClient    api.API
 	nodeInfo     *api.NodeInfo
-	relaynodeInfo *api.RelayNodeInfo
 	Tag          string
-	RelayTag     string
-	Relay        bool
-	userList     *[]api.UserInfo
+	userList  *[]api.UserInfo
 	tasks        []periodicTask
 	ibm          inbound.Manager
 	obm          outbound.Manager
 	stm          stats.Manager
-	dispatcher   *mydispatcher.DefaultDispatcher
-	rdispatcher  *router.Router
+	dispatcher   *xdispatcher.DefaultDispatcher
 	startAt      time.Time
-	// 60   60
-	// 60   60
+	rdispatcher  *router.Router
+	RelayTag     string
+	Relay        bool
+	relaynodeInfo *api.RelayNodeInfo
 }
 
 type periodicTask struct {
@@ -59,7 +57,7 @@ func New(server *core.Instance, api api.API, config *Config) *Controller {
 		ibm:        server.GetFeature(inbound.ManagerType()).(inbound.Manager),
 		obm:        server.GetFeature(outbound.ManagerType()).(outbound.Manager),
 		stm:        server.GetFeature(stats.ManagerType()).(stats.Manager),
-		dispatcher: server.GetFeature(routing.DispatcherType()).(*mydispatcher.DefaultDispatcher),
+		dispatcher: server.GetFeature(routing.DispatcherType()).(*xdispatcher.DefaultDispatcher),
 		rdispatcher: server.GetFeature(routing.RouterType()).(*router.Router),
 		startAt:    time.Now(),
 	}
@@ -70,6 +68,7 @@ func New(server *core.Instance, api api.API, config *Config) *Controller {
 // Start implement the Start() function of the service interface
 func (c *Controller) Start() error {
 	c.clientInfo = c.apiClient.Describe()
+	
 	// First fetch Node Info
 	newNodeInfo, err := c.apiClient.GetNodeInfo()
 	if err != nil {
@@ -78,7 +77,7 @@ func (c *Controller) Start() error {
 	c.nodeInfo = newNodeInfo
 	c.Tag = c.buildNodeTag()
 
-	// Update user
+	// Update users
 	userInfo, err := c.apiClient.GetUserList()
 	if err != nil {
 		return err
@@ -86,9 +85,8 @@ func (c *Controller) Start() error {
 
 	// sync controller userList
 	c.userList = userInfo
-	
+
 	c.Relay = false
-	
 	// Add new Relay	tag
 	if c.nodeInfo.Relay {
 		newRelayNodeInfo, err := c.apiClient.GetRelayNodeInfo()
@@ -99,7 +97,7 @@ func (c *Controller) Start() error {
 		c.relaynodeInfo = newRelayNodeInfo
 		c.RelayTag = c.buildRNodeTag()
 		
-		log.Printf("%s Taking a Detour Route [%s] For Users", c.logPrefix(), c.RelayTag)
+		//log.Printf("%s Taking a Detour Route [%s] For Users", c.logPrefix(), c.RelayTag)
 		err = c.addNewRelayTag(newRelayNodeInfo, userInfo)
 		if err != nil {
 			log.Panic(err)
@@ -127,26 +125,26 @@ func (c *Controller) Start() error {
 
 	// Add Rule Manager
 
-	// if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
-	// 	log.Printf("Get rule list filed: %s", err)
-	// } else if len(*ruleList) > 0 {
-	// 	if err := c.UpdateRule(c.Tag, *ruleList); err != nil {
-	// 		log.Print(err)
-	// 	}
-	// }
+	if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
+		log.Printf("Get rule list filed: %s", err)
+	} else if len(*ruleList) > 0 {
+		if err := c.UpdateRule(c.Tag, *ruleList); err != nil {
+			log.Print(err)
+		}
+	}
 
 	// Add periodic tasks
 	c.tasks = append(c.tasks,
 		periodicTask{
-			tag: "Node",
+			tag: "node",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(int(rand.Intn(150)) + 50) * time.Second,
+				Interval: time.Duration(60) * time.Second,
 				Execute:  c.nodeInfoMonitor,
 			}},
 		periodicTask{
-			tag: "User",
+			tag: "users",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(int(rand.Intn(150)) +  50 ) * time.Second,
+				Interval: time.Duration(60) * time.Second,
 				Execute:  c.userInfoMonitor,
 			}},
 	)
@@ -154,7 +152,7 @@ func (c *Controller) Start() error {
 	// Check cert service in need
 	if c.nodeInfo.TLSType == "tls"  && c.nodeInfo.CertMode != "none" {
 		c.tasks = append(c.tasks, periodicTask{
-			tag: "Cert",
+			tag: "cert renew",
 			Periodic: &task.Periodic{
 				Interval: time.Duration(60) * time.Second * 60,
 				Execute:  c.certMonitor,
@@ -163,7 +161,7 @@ func (c *Controller) Start() error {
 
 	// Start periodic tasks
 	for i := range c.tasks {
-		log.Printf("%s task scheduler for %s started", c.logPrefix(), c.tasks[i].tag)
+		log.Printf("%s Task Scheduler for %s started", c.logPrefix(), c.tasks[i].tag)
 		go c.tasks[i].Start()
 	}
 
@@ -185,10 +183,11 @@ func (c *Controller) Close() error {
 
 func (c *Controller) nodeInfoMonitor() (err error) {
 	// delay to start
-	if time.Since(c.startAt) < time.Duration(int(rand.Intn(150)) + 50)*time.Second {
+	if time.Since(c.startAt) < time.Duration(60)*time.Second {
 		return nil
-	}
-
+	}	
+	
+	// First fetch Node Info
 	var nodeInfoChanged = true
 	newNodeInfo, err := c.apiClient.GetNodeInfo()
 	if err != nil {
@@ -202,27 +201,28 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	}	
 
 	// Update User
-	var usersChanged = true
-	
+	var userChanged = true
 	newUserInfo, err := c.apiClient.GetUserList()
 	if err != nil {
-		if err.Error() == api.UserNotModified {
-			usersChanged = false
+		if err.Error() == api.UserNotModified  {
+			userChanged = false
 			newUserInfo = c.userList
 		} else {
 			log.Print(err)
 			return nil
 		}
 	}
-
-	var updateRelay = false	
 	
-	if usersChanged {
+	var updateRelay = false	
+	if userChanged ||  nodeInfoChanged {
 		updateRelay = true
-		// c.removeRules(c.Tag, c.userList)
 	}
 	
+	if c.Relay && updateRelay {
+		c.removeRules(c.Tag, c.userList)
+	}
 	
+	// If nodeInfo changed
 	if nodeInfoChanged {
 		if !reflect.DeepEqual(c.nodeInfo, newNodeInfo) {
 			// Remove old tag
@@ -239,7 +239,6 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				log.Print(err)
 				return nil
 			}
-			updateRelay = true
 			
 			// Add new tag
 			c.nodeInfo = newNodeInfo
@@ -259,7 +258,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 			nodeInfoChanged = false
 		}
 	}
-	
+
 	// Remove relay tag
 	if c.Relay && updateRelay {
 		err := c.removeRelayTag(c.RelayTag, c.userList)
@@ -279,17 +278,16 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 		c.relaynodeInfo = newRelayNodeInfo
 		c.RelayTag = c.buildRNodeTag()
 		
-		log.Printf("%s Reload Detour Route [%s] For Users", c.logPrefix(), c.RelayTag)
-		
 		err = c.addNewRelayTag(newRelayNodeInfo, newUserInfo)
 		if err != nil {
 			log.Panic(err)
 			return err
 		}
 		c.Relay = true
-	}	
+	}
 	
-	// Check Rule	
+	// Check Rule
+	
 	if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
 		if err.Error() != api.RuleNotModified {
 			log.Printf("Get rule list filed: %s", err)
@@ -300,6 +298,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 		}
 	}
 	
+
 	if nodeInfoChanged {
 		err = c.addNewUser(newUserInfo, newNodeInfo)
 		if err != nil {
@@ -314,7 +313,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 		}	
 	} else {
 		var deleted, added []api.UserInfo
-		if usersChanged {
+		if userChanged {
 			deleted, added = compareUserList(c.userList, newUserInfo)
 			if len(deleted) > 0 {
 				deletedEmail := make([]string, len(deleted))
@@ -325,7 +324,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				if err != nil {
 					log.Print(err)
 				}
-				log.Printf("%s %d Users Deleted", c.logPrefix(), len(deleted))
+				//log.Printf("%s %d User(s) deleted", c.logPrefix(), len(deleted))
 			}
 			if len(added) > 0 {
 				err = c.addNewUser(&added, c.nodeInfo)
@@ -342,6 +341,52 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	c.userList = newUserInfo
 	return nil
 }
+
+func (c *Controller) removeRelayTag(tag string, userInfo *[]api.UserInfo) (err error) {
+	for _, user := range *userInfo {
+		err = c.removeOutbound(fmt.Sprintf("%s_%d", tag, user.UID))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Controller) removeRules(tag string, userInfo *[]api.UserInfo){
+	for _, user := range *userInfo {
+		c.RemoveUserRule([]string{c.buildUserTag(&user)})			
+	}	
+}
+
+func (c *Controller) addNewRelayTag(newRelayNodeInfo *api.RelayNodeInfo, userInfo *[]api.UserInfo) (err error) {
+	if newRelayNodeInfo.NodeType != "Shadowsocks-Plugin" {
+		for _, user := range *userInfo {
+			var Key string			
+			if C.Contains(shadowaead_2022.List, strings.ToLower(newRelayNodeInfo.CypherMethod)) {
+				userKey, err := c.checkShadowsocksPassword(user.Passwd, newRelayNodeInfo.CypherMethod)
+				if err != nil {
+					newError(fmt.Errorf("[UID: %d] %s", user.UUID, err)).AtError()
+					continue
+				}
+				Key = fmt.Sprintf("%s:%s", newRelayNodeInfo.ServerKey, userKey)
+			} else {
+				Key = user.Passwd
+			}
+			RelayTagConfig, err := OutboundRelayBuilder(newRelayNodeInfo, c.RelayTag, user.UUID, user.Email, Key, user.UID)
+			if err != nil {
+				return err
+			}
+			
+			err = c.addOutbound(RelayTagConfig)
+			if err != nil {
+				return err
+			}
+			c.AddUserRule(fmt.Sprintf("%s_%d", c.RelayTag, user.UID), []string{c.buildUserTag(&user)})		
+		}
+	}
+	return nil
+}
+
 
 func (c *Controller) removeOldTag(oldTag string) (err error) {
 	err = c.removeInbound(oldTag)
@@ -363,69 +408,18 @@ func (c *Controller) addNewTag(newNodeInfo *api.NodeInfo) (err error) {
 		}
 		err = c.addInbound(inboundConfig)
 		if err != nil {
-
 			return err
 		}
-		if !c.nodeInfo.Relay {
-			outBoundConfig, err := OutboundBuilder(c.config, newNodeInfo, c.Tag)
-			if err != nil {
-
-				return err
-			}
-			err = c.addOutbound(outBoundConfig)
-			if err != nil {
-
-				return err
-			}
-		}
-
-	} else {
-		return c.addInboundForSSPlugin(*newNodeInfo)
-	}
-	return nil
-}
-
-func (c *Controller) removeRelayTag(tag string, userInfo *[]api.UserInfo) (err error) {
-	for _, user := range *userInfo {
-		err = c.removeOutbound(fmt.Sprintf("%s_%d", tag, user.UID))
+		outBoundConfig, err := OutboundBuilder(c.config, newNodeInfo, c.Tag)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (c *Controller) removeRules(tag string, userInfo *[]api.UserInfo){
-	for _, user := range *userInfo {
-		c.RemoveUsersRule([]string{c.buildUserTag(&user)})			
-	}	
-}
-
-func (c *Controller) addNewRelayTag(newRelayNodeInfo *api.RelayNodeInfo, userInfo *[]api.UserInfo) (err error) {
-	if newRelayNodeInfo.NodeType != "Shadowsocks-Plugin" {
-		for _, user := range *userInfo {
-			var Key string			
-			if C.Contains(shadowaead_2022.List, strings.ToLower(newRelayNodeInfo.CypherMethod)) {
-				userKey, err := c.checkShadowsocksPassword(user.Passwd, newRelayNodeInfo.CypherMethod)
-				if err != nil {
-					newError(fmt.Errorf("[UID: %d] %s", user.UUID, err)).AtError().WriteToLog()
-					continue
-				}
-				Key = fmt.Sprintf("%s:%s", newRelayNodeInfo.ServerKey, userKey)
-			} else {
-				Key = user.Passwd
-			}
-			RelayTagConfig, err := OutboundRelayBuilder(c.config, newRelayNodeInfo, c.RelayTag, user.UUID, user.Email, Key, user.UID)
-			if err != nil {
-				return err
-			}
-			
-			err = c.addOutbound(RelayTagConfig)
-			if err != nil {
-				return err
-			}
-			c.AddUsersRule(fmt.Sprintf("%s_%d", c.RelayTag, user.UID), []string{c.buildUserTag(&user)})		
+		err = c.addOutbound(outBoundConfig)
+		if err != nil {
+			return err
 		}
+	} else {
+		return c.addInboundForSSPlugin(*newNodeInfo)
 	}
 	return nil
 }
@@ -433,8 +427,7 @@ func (c *Controller) addNewRelayTag(newRelayNodeInfo *api.RelayNodeInfo, userInf
 func (c *Controller) addInboundForSSPlugin(newNodeInfo api.NodeInfo) (err error) {
 	// Shadowsocks-Plugin require a separate inbound for other TransportProtocol likes: ws, grpc
 	fakeNodeInfo := newNodeInfo
-	fakeNodeInfo.TransportProtocol = "tcp"
-	fakeNodeInfo.EnableTLS = false
+	fakeNodeInfo.Transport = "tcp"
 	// Add a regular Shadowsocks inbound and outbound
 	inboundConfig, err := InboundBuilder(c.config, &fakeNodeInfo, c.Tag)
 	if err != nil {
@@ -503,7 +496,7 @@ func (c *Controller) addNewUser(userInfo *[]api.UserInfo, nodeInfo *api.NodeInfo
 	if err != nil {
 		return err
 	}
-	log.Printf("%s %d New Users Added", c.logPrefix(), len(*userInfo))
+	//log.Printf("%s %d New User(s) Added", c.logPrefix(), len(*userInfo))
 	return nil
 }
 
@@ -545,8 +538,7 @@ func compareUserList(old, new *[]api.UserInfo) (deleted, added []api.UserInfo) {
 }
 
 func (c *Controller) userInfoMonitor() (err error) {
-
-	// Get User traffic
+	// Get Service traffic
 	var userTraffic []api.UserTraffic
 	var upCounterList []stats.Counter
 	var downCounterList []stats.Counter
@@ -585,19 +577,20 @@ func (c *Controller) userInfoMonitor() (err error) {
 	if onlineDevice, err := c.GetOnlineDevice(c.Tag); err != nil {
 		log.Print(err)
 	} else if len(*onlineDevice) > 0 {
-		if err = c.apiClient.ReportNodeOnlineUsers(onlineDevice); err != nil {
+		if err = c.apiClient.ReportNodeOnlineIPs(onlineDevice); err != nil {
 			log.Print(err)
 		} else {
 			log.Printf("%s Report %d online IPs", c.logPrefix(), len(*onlineDevice))
 		}
 	}
 	
+	// Report Illegal user
 	if detectResult, err := c.GetDetectResult(c.Tag); err != nil {
 		log.Print(err)
 	} else if len(*detectResult) > 0 {
 		log.Printf("%s blocked %d access by detection rules", c.logPrefix(), len(*detectResult))
 	}
-	
+
 	return nil
 }
 
@@ -610,23 +603,28 @@ func (c *Controller) buildRNodeTag() string {
 }
 
 func (c *Controller) logPrefix() string {
-	return fmt.Sprintf("[%s] %s(NodeID=%d)", c.clientInfo.APIHost, c.nodeInfo.NodeType, c.nodeInfo.NodeID)
+	transportProtocol := conf.TransportProtocol(c.nodeInfo.Transport)
+	networkType, err := transportProtocol.Build()
+	if err != nil {
+		return fmt.Sprintf("[%s] %s(NodeID=%d)", c.clientInfo.APIHost, c.nodeInfo.NodeType, c.nodeInfo.NodeID)
+	}
+	
+	return fmt.Sprintf("[%s] %s(NodeID=%d) [Transport=%s]", c.clientInfo.APIHost, c.nodeInfo.NodeType, c.nodeInfo.NodeID, networkType)
 }
 
 // Check Cert
 func (c *Controller) certMonitor() error {
-	if c.nodeInfo.TLSType == "tls"  {
-		switch c.nodeInfo.CertMode {
-		case "dns", "http":
-			lego, err := mylego.New(c.config.CertConfig)
-			if err != nil {
-				log.Print(err)
-			}
-			_, _, _, err = lego.RenewCert(c.nodeInfo.CertMode, c.nodeInfo.CertDomain)
-			if err != nil {
-				log.Print(err)
-			}
+	switch c.nodeInfo.CertMode {
+	case "dns", "http", "tls":
+		lego, err := mylego.New(c.config.CertConfig)
+		if err != nil {
+			log.Print(err)
+		}
+		_, _, _, err = lego.RenewCert(c.nodeInfo.CertMode, c.nodeInfo.CertDomain)
+		if err != nil {
+			log.Print(err)
 		}
 	}
+	
 	return nil
 }
