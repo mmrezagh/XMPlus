@@ -6,7 +6,8 @@ import (
 	"reflect"
 	"time"
 	"strings"
-
+	"math/rand"
+	
 	"github.com/xcode75/xcore/common/protocol"
 	"github.com/xcode75/xcore/common/task"
 	"github.com/xcode75/xcore/core"
@@ -40,6 +41,8 @@ type Controller struct {
 	dispatcher   *mydispatcher.DefaultDispatcher
 	rdispatcher  *router.Router
 	startAt      time.Time
+	// 60   60
+	// 60   60
 }
 
 type periodicTask struct {
@@ -124,26 +127,26 @@ func (c *Controller) Start() error {
 
 	// Add Rule Manager
 
-	if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
-		log.Printf("Get rule list filed: %s", err)
-	} else if len(*ruleList) > 0 {
-		if err := c.UpdateRule(c.Tag, *ruleList); err != nil {
-			log.Print(err)
-		}
-	}
+	// if ruleList, err := c.apiClient.GetNodeRule(); err != nil {
+	// 	log.Printf("Get rule list filed: %s", err)
+	// } else if len(*ruleList) > 0 {
+	// 	if err := c.UpdateRule(c.Tag, *ruleList); err != nil {
+	// 		log.Print(err)
+	// 	}
+	// }
 
 	// Add periodic tasks
 	c.tasks = append(c.tasks,
 		periodicTask{
 			tag: "Node",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(60) * time.Second,
+				Interval: time.Duration(int(rand.Intn(150)) + 50) * time.Second,
 				Execute:  c.nodeInfoMonitor,
 			}},
 		periodicTask{
 			tag: "User",
 			Periodic: &task.Periodic{
-				Interval: time.Duration(60) * time.Second,
+				Interval: time.Duration(int(rand.Intn(150)) +  50 ) * time.Second,
 				Execute:  c.userInfoMonitor,
 			}},
 	)
@@ -182,7 +185,7 @@ func (c *Controller) Close() error {
 
 func (c *Controller) nodeInfoMonitor() (err error) {
 	// delay to start
-	if time.Since(c.startAt) < time.Duration(60)*time.Second {
+	if time.Since(c.startAt) < time.Duration(int(rand.Intn(150)) + 50)*time.Second {
 		return nil
 	}
 
@@ -216,7 +219,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	
 	if usersChanged {
 		updateRelay = true
-		c.removeRules(c.Tag, c.userList)
+		// c.removeRules(c.Tag, c.userList)
 	}
 	
 	
