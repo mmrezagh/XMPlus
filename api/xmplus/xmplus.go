@@ -391,19 +391,7 @@ func (c *APIClient) parseNodeResponse(s *serverConfig) (*api.NodeInfo, error) {
 			header, _ = json.Marshal(map[string]any{
 					"type": htype,
 				})		
-		case "httpupgrade":
-			path = s.NetworkSettings.Path
-			host = s.NetworkSettings.Host
-		case "splithttp":
-			path = s.NetworkSettings.Path
-			host = s.NetworkSettings.Host
-			scMaxEachPostBytes = int32(s.NetworkSettings.scMaxEachPostBytes)
-			scMaxConcurrentPosts = int32(s.NetworkSettings.scMaxConcurrentPosts)
-			scMinPostsIntervalMs = int32(s.NetworkSettings.scMinPostsIntervalMs)
-			noSSEHeader = s.NetworkSettings.noSSEHeader
-
-	
-			}
+	}
 	
 	if NodeType == "Shadowsocks"  && (transportProtocol == "ws" || transportProtocol == "grpc" || transportProtocol == "quic") {
 		NodeType = "Shadowsocks-Plugin"
@@ -451,11 +439,6 @@ func (c *APIClient) parseNodeResponse(s *serverConfig) (*api.NodeInfo, error) {
 		Xver:              ProxyProtocol,	
 		Relay:             s.Relay,
 		RelayNodeID:       s.Relayid,
-		ScMaxEachPostBytes: scMaxEachPostBytes, 
-		ScMaxConcurrentPosts: scMaxConcurrentPosts,
-		ScMinPostsIntervalMs: scMinPostsIntervalMs,
-		NoSSEHeader:      noSSEHeader,
-
 	}
 	return nodeInfo, nil
 }
@@ -531,18 +514,6 @@ func (c *APIClient) GetRelayNodeInfo() (*api.RelayNodeInfo, error) {
 					})
 			}
 		}
-	case "httpupgrade":
-		path = s.NetworkSettings.Path
-		host = s.NetworkSettings.Host
-	case "splithttp":
-		path = s.NetworkSettings.Path
-		host = s.NetworkSettings.Host
-		scMaxEachPostBytes = int32(s.NetworkSettings.scMaxEachPostBytes)
-		scMaxConcurrentPosts = int32(s.NetworkSettings.scMaxConcurrentPosts)
-		scMinPostsIntervalMs = int32(s.NetworkSettings.scMinPostsIntervalMs)
-		noSSEHeader = s.NetworkSettings.noSSEHeader
-
-
 	case "quic":
 		quic_key = s.RNetworkSettings.Quickey
 		quic_security = s.RNetworkSettings.QuicSecurity
@@ -603,11 +574,6 @@ func (c *APIClient) GetRelayNodeInfo() (*api.RelayNodeInfo, error) {
 		SpiderX:           SpiderX,
 		Show:              Show,
 		ServerName:        ServerName,
-
-		ScMaxEachPostBytes: scMaxEachPostBytes, 
-		ScMaxConcurrentPosts: scMaxConcurrentPosts,
-		ScMinPostsIntervalMs: scMinPostsIntervalMs,
-		NoSSEHeader:      noSSEHeader,
 	}
 	return nodeInfo, nil
 }
