@@ -1,5 +1,20 @@
-# XMPlus
-XMPlus v1.0 backend
+## Features
+
+|Function             | vmess | vless | trojan | ss   | ss-plugin|
+| ----------------| ----- | ----- | -------| -----|----------|
+| Get Server Info     | √     |  √    |   √    |  √   |    √     |
+| Get User Info     | √     |  √    |   √    |  √   |    √     |
+| Report User Stats     | √     |  √    |   √    |  √   |    √     |
+| Report Server Stats   | √     |  √    |   √    |  √   |    √     |
+| Auto Apply tls Cert  | √     |  √    |   √    |  √   |    √     |
+| Auto-Renew tls Cert  | √     |  √    |   √    |  √   |    √     |
+| Online Statistics     | √     |  √    |   √    |  √   |    √     |
+| Online User IPlinit   | √     |  √    |   √    |  √   |    √     |
+| Detection Rules        | √     |  √    |   √    |  √   |    √     |
+| Server Speedlimit     | √     |  √    |   √    |  √   |    √     |
+| User Speedlimit     | √     |  √    |   √    |  √   |    √     |
+| Customize DNS       | √     |  √    |   √    |  √   |    √     |
+| Server Relay       | √     |  √    |   √    |  √   |    X     |
 
 
 #### Config directory
@@ -7,67 +22,15 @@ XMPlus v1.0 backend
 cd /etc/XMPlus
 ```
 
-### Onclick XMPlus backennd Install
+### Onclick Install
 ```
-bash <(curl -Ls https://raw.githubusercontent.com/XMPlusDev/XMPlusv1/install/install.sh)
-```
-
-### /etc/XMPlus/config.yml
-```
-Log:
-  Level: warning # Log level: none, error, warning, info, debug 
-  AccessPath: # /etc/XMPlus/access.Log
-  ErrorPath: # /etc/XMPlus/error.log
-DnsConfigPath:  #/etc/XMPlus/dns.json
-RouteConfigPath: # /etc/XMPlus/route.json
-InboundConfigPath: # /etc/XMPlus/inbound.json
-OutboundConfigPath: # /etc/XMPlus/outbound.json
-ConnectionConfig:
-  Handshake: 8 
-  ConnIdle: 300 
-  UplinkOnly: 0 
-  DownlinkOnly: 0 
-  BufferSize: 64
-Nodes:
-  -
-    ApiConfig:
-      ApiHost: "https://www.xyz.com"
-      ApiKey: "123"
-      NodeID: 1
-      Timeout: 30 
-      RuleListPath: # /etc/XMPlus/rulelist Path to local rulelist file
-    ControllerConfig:
-      EnableDNS: false # Use custom DNS config, Please ensure that you set the dns.json well
-      DNSStrategy: AsIs # AsIs, UseIP, UseIPv4, UseIPv6
-      CertConfig:
-        Email: author@xmplus.dev                    # Required when Cert Mode is not none
-        CertFile: /etc/XMPlus/node1.xmplus.dev.crt  # Required when Cert Mode is file
-        KeyFile: /etc/XMPlus/node1.xmplus.dev.key   # Required when Cert Mode is file
-        Provider: cloudflare                        # Required when Cert Mode is dns
-        CertEnv:                                    # Required when Cert Mode is dns
-          CLOUDFLARE_EMAIL:                         # Required when Cert Mode is dns
-          CLOUDFLARE_API_KEY:                       # Required when Cert Mode is dns
-      EnableFallback: false # Only support for Trojan and Vless
-      FallBackConfigs:  # Support multiple fallbacks
-        - SNI: # TLS SNI(Server Name Indication), Empty for any
-          Alpn: # Alpn, Empty for any
-          Path: # HTTP PATH, Empty for any
-          Dest: 80 # Required, Destination of fallback, check https://xtls.github.io/config/features/fallback.html for details.
-          ProxyProtocolVer: 0 # Send PROXY protocol version, 0 for disable
-      IPLimit:
-        Enable: false # Enable the global ip limit of a user 
-        RedisNetwork: tcp # Redis protocol, tcp or unix
-        RedisAddr: 127.0.0.1:6379 # Redis server address, or unix socket path
-        RedisUsername: default # Redis username
-        RedisPassword: YOURPASSWORD # Redis password
-        RedisDB: 0 # Redis DB
-        Timeout: 5 # Timeout for redis request
-        Expiry: 60 # Expiry time (second) 
+bash <(curl -Ls https://raw.githubusercontent.com/xcode75/XMPlus/install/install.sh)
 ```
 
-## XMPlus Panel Server configuration
+## FRONTEND SERVER CONFIG
 
 ### Network Settings
+
 
 #### TCP
 ```
@@ -90,7 +53,7 @@ Nodes:
     "request": {
       "path": "/xmplus",
       "headers": {
-        "Host": ["www.baidu.com", "www.taobao.com", "www.cloudflare.com"]
+        "Host": "x.tld.com"
       }
     }
   }
@@ -99,11 +62,12 @@ Nodes:
 ####  WS
 ```
 {
-  "transport": "ws",
+  "transport" : "ws",
   "acceptProxyProtocol": false,
-  "path": "/xmplus?ed=2560",
-  "host": "hk1.xyz.com",
-  "cdn_host": "fakedomain.com"
+  "path": "/xmplus",
+  "headers": {
+    "Host": "x.tld.com"
+  }
 }
 ```
 
@@ -112,9 +76,8 @@ Nodes:
 {
   "transport" : "h2",
   "acceptProxyProtocol": false,
-  "host": "hk1.xyz.com",
-  "path": "/",
-  "cdn_host": "fakedomain.com"
+  "host": "x.tld.com",
+  "path": "/xmplus"
 }
 ```
 
@@ -123,36 +86,9 @@ Nodes:
 {
   "transport" : "grpc",
   "acceptProxyProtocol": false,
-  "serviceName": "xmplus",
-  "authority": "hk1.xyz.com"
+  "serviceName": "xmplus"
 }
 ```
-
-####  HTTPUPGRADE
-```
-{
-  "transport" : "httpupgrade",
-  "acceptProxyProtocol": false,
-  "host": "hk1.xyz.com",
-  "path": "/xmplus?ed=2560",
-  "cdn_host": "fakedomain.com"
-}
-```
-
-####  SPLITHTTP
-```
-{
-  "transport" : "splithttp",
-  "host": "hk1.xyz.com",
-  "cdn_host": "fakedomain.com",
-  "path": "/",
-  "scMaxEachPostBytes": 1000000,
-  "scMaxConcurrentPosts": 100,
-  "scMinPostsIntervalMs": 30,
-  "noSSEHeader": false
-}
-```
-
 ####  QUIC
 ```
 {
@@ -185,20 +121,13 @@ Nodes:
 ```
 {
   "serverName": "xmplus.dev",
-  "rejectUnknownSni": false,
+  "rejectUnknownSni": true,
   "allowInsecure": false,
-  "fingerprint": "chrome",
-  "sni" : "xmplus.dev",
-  "alpn": [
-    "h2",
-    "http/1.1"
-  ]
+  "fingerprint": "chrome"
 }
 ```
 #### REALITY
-
-`Generate Private and Public Keys :   xmplus x25519`
-
+[Generate Private and Public Keys Here](https://go.dev/play/p/N5kQhIjtye7)
 ```
 {
   "show" : false,
@@ -219,4 +148,53 @@ Nodes:
   "spiderx": "",
   "publickey": "7xhH4b_VkliBxGulljcyPOH-bYUA2dl-XAdZAsfhk04"
 }
+```
+
+## BACKEND SERVER CONFIG
+
+```
+Log:
+  Level: warning # Log level: none, error, warning, info, debug 
+  AccessPath: # /etc/XMPlus/access.Log
+  ErrorPath: # /etc/XMPlus/error.log
+DnsConfigPath:  #/etc/XMPlus/dns.json
+RouteConfigPath: # /etc/XMPlus/route.json
+InboundConfigPath: # /etc/XMPlus/inbound.json
+OutboundConfigPath: # /etc/XMPlus/outbound.json
+ConnectionConfig:
+  Handshake: 8 
+  ConnIdle: 300 
+  UplinkOnly: 0 
+  DownlinkOnly: 0 
+  BufferSize: 64
+Nodes:
+  -
+    ApiConfig:
+      ApiHost: "https://www.xyz.com"
+      ApiKey: "123"
+      NodeID: 1
+      Timeout: 30 
+    ControllerConfig:
+      CertConfig:
+        Email: author@xmplus.dev                    # Required when Cert Mode is not none
+        CertFile: /etc/XMPlus/node1.xmplus.dev.crt  # Required when Cert Mode is file
+        KeyFile: /etc/XMPlus/node1.xmplus.dev.key   # Required when Cert Mode is file
+        Provider: cloudflare                        # Required when Cert Mode is dns
+        CertEnv:                                    # Required when Cert Mode is dns
+          CLOUDFLARE_EMAIL:                         # Required when Cert Mode is dns
+          CLOUDFLARE_API_KEY:                       # Required when Cert Mode is dns
+      EnableDNS: false # Use custom DNS config, Please ensure that you set the dns.json well
+      DNSStrategy: AsIs # AsIs, UseIP, UseIPv4, UseIPv6
+      EnableFallback: false # Only support for Trojan and Vless
+      FallBackConfigs:  # Support multiple fallbacks
+        - SNI: # TLS SNI(Server Name Indication), Empty for any
+          Alpn: # Alpn, Empty for any
+          Path: # HTTP PATH, Empty for any
+          Dest: 80 # Required, Destination of fallback, check https://xtls.github.io/config/features/fallback.html for details.
+          ProxyProtocolVer: 0 # Send PROXY protocol version, 0 for disable
+      EnableFragment: false 
+      FragmentConfigs:
+        Packets: "tlshello" # TLS Hello Fragmentation (into multiple handshake messages)
+        Length: "100-200"   # minLength to maxLength
+        Interval: "10-20"   # minInterval to maxInterval   
 ```
